@@ -65,8 +65,8 @@ def send_request(url, method, proxy = nil, headers = {})
     puts "[+] Request sent via #{proxy || 'direct connection'} - Response: #{response.code}"
     return response.code.to_i
   rescue => e
-    puts "[!] Error: #{e.message}"
-    return 0
+    puts "[!] Error: #{e.message} for proxy #{proxy}"
+    return nil # Skip this request and retry
   end
 end
 
@@ -74,8 +74,11 @@ end
 def generate_headers
   {
     "User-Agent" => "Mozilla/#{rand(5..10)}.0 (Windows NT #{rand(6..10)}.#{rand(0..3)}) Gecko/#{rand(20100101..20221231)} Firefox/#{rand(50..100)}",
-    "X-Forwarded-For" => "#{rand(1..255)}.#{rand(1..255)}.#{rand(1..255)}.#{rand(1..255)}",
-    "Referer" => "https://google.com/search?q=#{rand(1000)}"
+    "Accept" => "*/*",
+    "Accept-Encoding" => "gzip, deflate",
+    "Connection" => "keep-alive",
+    "Referer" => "https://google.com/search?q=#{rand(1000)}",
+    "X-Forwarded-For" => "#{rand(1..255)}.#{rand(1..255)}.#{rand(1..255)}.#{rand(1..255)}"
   }
 end
 
@@ -91,7 +94,16 @@ def stress_test(url, threads, requests_per_thread, proxies, method, delay)
       requests_per_thread.times do
         proxy = proxies.any? ? proxies_cycle.next : nil
         headers = generate_headers
-        send_request(url, method, proxy, headers)
+
+        response_code = nil
+        retry_attempts = 0
+
+        # Retry logic for failed requests
+        while response_code.nil? && retry_attempts < 3
+          response_code = send_request(url, method, proxy, headers)
+          retry_attempts += 1 if response_code.nil?
+        end
+
         sleep(delay / 1000.0) # Convert delay from ms to seconds
       end
     end
