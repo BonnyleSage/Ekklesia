@@ -106,7 +106,6 @@ Simulate a Layer 4 transport-level attack:
 - [ALERT] Server is down or unresponsive!
 
 ## 📄 Requirements
-
 ❗Ruby: Ensure Ruby is installed (ruby -v).
 ❗Network Access: Ensure you can access the target and proxies (if applicable).
 ❗Proxy List (optional): Use a proxy list for anonymized requests.
