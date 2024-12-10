@@ -82,10 +82,12 @@ end
 # Perform the stress test
 def stress_test(url, threads, requests_per_thread, proxies, method, delay)
   thread_pool = []
-  proxies_cycle = proxies.cycle if proxies.any?
 
   threads.times do
     thread_pool << Thread.new do
+      # Each thread gets its own proxy cycle
+      proxies_cycle = proxies.cycle if proxies.any?
+
       requests_per_thread.times do
         proxy = proxies.any? ? proxies_cycle.next : nil
         headers = generate_headers
