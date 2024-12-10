@@ -22,7 +22,7 @@ Ekklesia is a ruby based, powerful and customizable stress-testing (Ddos)tool de
 
 1. Clone the repository:
 
-git clone https://github.com/yourusername/ekklesia.git
+git clone https://github.com/BonnyleSage/ekklesia.git
 cd ekklesia
 
 2. Ensure Ruby is installed:
