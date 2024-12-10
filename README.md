@@ -39,22 +39,22 @@ Ekklesia is a ruby based, powerful and customizable stress-testing (Ddos)tool de
 
 ## 📚 Examples
 **1. Basic Stress Test**
-  Perform a basic stress test on a target:
-   💫 ruby ekklesia.rb -u https://example.com
+Perform a basic stress test on a target:
+💫 ruby ekklesia.rb -u https://example.com
 
 **2. Stress Test with Multiple Threads**
-     Use 20 threads for faster testing:
-       💫 ruby ekklesia.rb -u https://example.com -t 20
+Use 20 threads for faster testing:
+💫 ruby ekklesia.rb -u https://example.com -t 20
  
  **3. Use a Proxy List**
  Run the test using a proxy list from proxies.txt:
-     💫 ruby ekklesia.rb -u https://example.com -p proxies.txt
-  **4. Custom HTTP Method**
-  Use the POST method for the attack: 
-    💫 ruby ekklesia.rb -u https://example.com -m POST
-  **5. Layer 4 Attack**
-  Simulate a Layer 4 transport-level attack:
-    💫ruby ekklesia.rb -u https://example.com -l 4
+💫 ruby ekklesia.rb -u https://example.com -p proxies.txt
+**4. Custom HTTP Method**
+Use the POST method for the attack: 
+💫 ruby ekklesia.rb -u https://example.com -m POST
+**5. Layer 4 Attack**
+Simulate a Layer 4 transport-level attack:
+💫ruby ekklesia.rb -u https://example.com -l 4
 
 ## 🌟 Key Features in Action
  **1. Randomized Headers for WAF Evasion**
