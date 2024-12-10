@@ -8,6 +8,10 @@ def green_bold(text)
   "\e[1;32m#{text}\e[0m" # Bold green
 end
 
+def red_bold(text)
+  "\e[1;31m#{text}\e[0m" # Bold red
+end
+
 # Display the initial banner
 def banner
   puts green_bold("===========================================")
@@ -58,15 +62,14 @@ def send_request(url, method, proxy = nil, headers = {})
               when "HEAD"
                 Net::HTTP::Head.new(uri.request_uri, headers)
               else
-                raise "[!] Unsupported HTTP method: #{method}"
+                raise red_bold("[!] Unsupported HTTP method: #{method}")
               end
 
     response = http.request(request)
-    puts "[+] Request sent via #{proxy || 'direct connection'} - Response: #{response.code}"
-    return response.code.to_i
+    return response.code.to_i, proxy if response.code.to_i == 200 # Only return 200 responses
+    return nil, proxy
   rescue => e
-    puts "[!] Error: #{e.message} for proxy #{proxy}"
-    return nil # Skip this request and retry
+    return nil, proxy
   end
 end
 
@@ -95,13 +98,9 @@ def stress_test(url, threads, requests_per_thread, proxies, method, delay)
         proxy = proxies.any? ? proxies_cycle.next : nil
         headers = generate_headers
 
-        response_code = nil
-        retry_attempts = 0
-
-        # Retry logic for failed requests
-        while response_code.nil? && retry_attempts < 3
-          response_code = send_request(url, method, proxy, headers)
-          retry_attempts += 1 if response_code.nil?
+        response_code, used_proxy = send_request(url, method, proxy, headers)
+        if response_code == 200
+          puts green_bold("[+] Request sent via #{used_proxy || 'direct connection'} - Response: 200")
         end
 
         sleep(delay / 1000.0) # Convert delay from ms to seconds
@@ -110,7 +109,7 @@ def stress_test(url, threads, requests_per_thread, proxies, method, delay)
   end
 
   thread_pool.each(&:join)
-  puts "[+] Stress test completed."
+  puts green_bold("[+] Stress test completed.")
 end
 
 # Parse command-line options
@@ -145,7 +144,7 @@ end.parse!
 
 # Validate input
 if options[:url].nil?
-  puts "[!] Error: Target URL is required."
+  puts red_bold("[!] Error: Target URL is required.")
   exit
 end
 
@@ -163,9 +162,9 @@ if proxy_file
   begin
     proxies = File.readlines(proxy_file).map(&:strip)
     proxy_enabled = true
-    puts "[+] Loaded #{proxies.size} proxies from #{proxy_file}"
+    puts green_bold("[+] Loaded #{proxies.size} proxies from #{proxy_file}")
   rescue Errno::ENOENT
-    puts "[!] Error: Proxy file not found."
+    puts red_bold("[!] Error: Proxy file not found.")
     exit
   end
 end
